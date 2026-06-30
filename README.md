@@ -72,10 +72,10 @@ See **[USER_GUIDE.md](USER_GUIDE.md)** for full, non-technical instructions.
 By default each person has a local SQLite database. To **share one database**
 across a team, point the tool at a Supabase (Postgres) database:
 
-1. Copy `.env.example` to `.env`
-2. Paste your Supabase **direct** connection string (port 5432) into it:
-   `SUPABASE_DB_URL=postgresql://postgres:PASSWORD@db.xxxx.supabase.co:5432/postgres`
-3. Run `run_db_test.bat` to confirm it connects.
+1. Run `setup_db.bat` and paste your Supabase **Session pooler** connection
+   string (Supabase → Connect → Session pooler → URI, port 5432) when asked.
+   It writes the private `.env` and tests the connection.
+   *(Or copy `.env.example` to `.env` manually and run `run_db_test.bat`.)*
 
 The `.env` file is git-ignored, so the password never enters the repo. With no
 `.env`, the tool automatically falls back to local SQLite. Everyone who sets the

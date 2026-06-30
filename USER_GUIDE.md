@@ -118,14 +118,15 @@ By default the tool keeps listings in a file on your own computer. If you want
 you and a coworker to **share the same listings and scores**, point both of your
 computers at one Supabase database.
 
-1. In Supabase, open **Project Settings → Database → Connection string** and copy
-   the **URI** (use the *direct* connection, port **5432**). Replace
-   `[YOUR-PASSWORD]` with your database password.
-2. In the project folder, make a copy of **`.env.example`** and rename the copy to
-   **`.env`**.
-3. Open `.env` in Notepad and paste your connection string after
-   `SUPABASE_DB_URL=`. Save.
-4. Double-click **`run_db_test.bat`** — it should say **SUCCESS**.
+1. In Supabase, click **Connect** (top bar) → choose **Session pooler** → copy
+   the **URI**. (Use *Session pooler*, port **5432** — it works on all networks.
+   Avoid "Transaction pooler" / port 6543.) Replace `[YOUR-PASSWORD]` with your
+   database password.
+2. Double-click **`setup_db.bat`**, paste the connection string when asked, and
+   press Enter. It saves it privately and tests the connection for you.
+
+   *(Manual alternative: copy `.env.example` to `.env`, paste your string after
+   `SUPABASE_DB_URL=`, then run `run_db_test.bat`.)*
 
 Give your coworker the same connection string (they put it in their own `.env`).
 Now you both share one database. Your `.env` file is private and never leaves your
