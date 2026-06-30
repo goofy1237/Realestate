@@ -13,12 +13,42 @@
 import html
 import io
 import json
-from datetime import date, datetime
+import threading
+import traceback
+import webbrowser
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs, urlencode
 
+import db
 import storage
 
 PORT = 8766
+REA_URL = "https://www.realestate.com.au/rent/in-melbourne+cbd,+vic+3000/list-1"
+
+# Background "Score now" job state (so the portal button can run scoring).
+SCORE_STATE = {"running": False, "message": ""}
+
+
+def _run_scoring():
+    SCORE_STATE["running"] = True
+    SCORE_STATE["message"] = "Scoring with location data…"
+    try:
+        import score_all
+        score_all.main()
+        SCORE_STATE["message"] = "Scoring complete."
+    except Exception as e:
+        SCORE_STATE["message"] = f"Scoring error: {e}"
+        traceback.print_exc()
+    finally:
+        SCORE_STATE["running"] = False
+
+
+def start_scoring():
+    if SCORE_STATE["running"]:
+        return False
+    threading.Thread(target=_run_scoring, daemon=True).start()
+    return True
 
 VERDICT_COLOURS = {
     "Pursue & apply": "#137333",
@@ -98,6 +128,25 @@ header .meta { font-size:13px; opacity:.85; margin-top:4px; }
 .why { font-size:12px; color:#777; margin-top:8px; }
 details summary { cursor:pointer; }
 .agent { font-size:12px; color:#444; margin-top:6px; }
+.added { font-size:11px; color:#888; margin-top:4px; }
+.toolbar { padding:10px 24px; background:#fff; border-bottom:1px solid #e0e0e0;
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.toolbar .sep { width:1px; height:22px; background:#dde; margin:0 4px; }
+.btn { text-decoration:none; padding:7px 13px; border-radius:6px; border:1px solid #c5ccd6;
+  background:#fff; color:#0b1f3a; font-size:13px; cursor:pointer; }
+.btn.primary { background:#137333; color:#fff; border-color:#137333; }
+.btn.go { background:#0b1f3a; color:#fff; border-color:#0b1f3a; }
+.btn.active { background:#0b1f3a; color:#fff; }
+.filterbar { padding:8px 24px; background:#fbfcfe; border-bottom:1px solid #eee;
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; color:#555; }
+.filterbar input, .filterbar select { font-size:13px; padding:4px 6px;
+  border:1px solid #c5ccd6; border-radius:5px; }
+.banner { margin:12px 24px 0; padding:10px 14px; border-radius:8px;
+  background:#fff3e0; color:#8a5400; border:1px solid #ffe0b2; font-size:13px; }
+.toast { position:fixed; bottom:18px; right:18px; background:#0b1f3a; color:#fff;
+  padding:10px 16px; border-radius:8px; font-size:13px; opacity:0;
+  transition:opacity .25s; pointer-events:none; }
+.toast.show { opacity:1; }
 """
 
 JS = """
@@ -110,6 +159,35 @@ function save(el){
       if(s){ s.style.opacity=1; setTimeout(()=>{s.style.opacity=0;}, 1200); }
    });
 }
+function toast(msg){
+  let t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function openREA(){
+  fetch('/open-rea').then(()=>toast('Opened realestate.com.au — browse to capture listings'));
+}
+function scoreNow(){
+  fetch('/score',{method:'POST'}).then(r=>r.json()).then(j=>{
+    toast(j.started ? 'Scoring started…' : 'Scoring already running…');
+    pollScore();
+  });
+}
+let _wasRunning=false;
+function pollScore(){
+  fetch('/score-status').then(r=>r.json()).then(j=>{
+    const b=document.getElementById('scorebanner');
+    if(j.running){
+      _wasRunning=true;
+      b.style.display='block'; b.textContent='⏳ '+(j.message||'Scoring…');
+      setTimeout(pollScore, 2500);
+    } else {
+      if(_wasRunning){ _wasRunning=false; location.reload(); }
+      else { b.style.display='none'; }
+    }
+  });
+}
+window.addEventListener('load', pollScore);
 """
 
 
@@ -178,6 +256,7 @@ def render_card(row, rank):
     verdict_opts = ["", "Pursue & apply", "Inspect first", "Pass (low priority)",
                     "Pass (reject)"]
 
+    added = (row.get("date_scraped") or "")[:10]
     url = row.get("url") or "#"
     return f"""
     <div class="{cls}">
@@ -194,6 +273,7 @@ def render_card(row, rank):
           </div>
           <div class="bars">{bars}</div>
           <div class="agent">{agent}<br>{extra_line}</div>
+          <div class="added">🗓 Added {esc(added) or '—'}</div>
           {('<div class="why">'+ ' | '.join(why_bits) +'</div>') if why_bits else ''}
         </div>
       </div>
@@ -215,15 +295,24 @@ def render_card(row, rank):
     """
 
 
-def render_page(view="shortlist"):
-    rows = storage.all_listings(include_rejected=(view != "shortlist"))
-    if view == "shortlist":
-        rows = [r for r in rows if not r.get("rejected")]
+def _qs(**d):
+    clean = {k: v for k, v in d.items() if v}
+    return ("/?" + urlencode(clean)) if clean else "/"
+
+
+def render_page(view="shortlist", sort="composite", added_from="", added_to=""):
+    rows = storage.all_listings(
+        include_rejected=(view == "all"),
+        added_from=added_from or None, added_to=added_to or None,
+        order=sort)
     tally = storage.counts()
     due = [r for r in storage.all_listings() if is_followup_due(r)]
 
     cards = "".join(render_card(r, i) for i, r in enumerate(rows, 1)) or \
-        "<p>No listings yet. Browse realestate.com.au with the extension, then run the scorer.</p>"
+        ('<div class="card"><b>No listings match.</b><br>'
+         'Click <b>Open realestate.com.au</b> above and browse some pages '
+         '(they capture automatically), then click <b>Score now</b>. '
+         'Or widen the date filter.</div>')
 
     due_html = ""
     if due:
@@ -234,28 +323,77 @@ def render_page(view="shortlist"):
         due_html = (f'<div class="card due"><b>⏰ Follow-ups due '
                     f'({len(due)})</b><ul>{items}</ul></div>')
 
+    # tabs + export carry the current date filter
     def tab(name, label):
         active = " active" if view == name else ""
-        return f'<a class="{active.strip()}" href="/?view={name}">{label}</a>'
+        href = _qs(view=name, sort=sort, **{"from": added_from, "to": added_to})
+        return f'<a class="btn{active}" href="{href}">{label}</a>'
+
+    exp = lambda scope: ("/export.xlsx" + "?" + urlencode(
+        {k: v for k, v in {"scope": scope, "from": added_from,
+                           "to": added_to}.items() if v}))
+
+    today = date.today().isoformat()
+    wk = (date.today() - timedelta(days=6)).isoformat()
+    date_btn = lambda lbl, f, t: (
+        f'<a class="btn{(" active" if (added_from==f and added_to==t) else "")}" '
+        f'href="{_qs(view=view, sort=sort, **{"from": f, "to": t})}">{lbl}</a>')
+
+    href_score = _qs(view=view, sort="composite",
+                     **{"from": added_from, "to": added_to})
+    href_date = _qs(view=view, sort="date",
+                    **{"from": added_from, "to": added_to})
+    sel_score = " selected" if sort != "date" else ""
+    sel_date = " selected" if sort == "date" else ""
+    sort_sel = (
+        '<select onchange="location.href=this.value">'
+        f'<option value="{href_score}"{sel_score}>Score (high&rarr;low)</option>'
+        f'<option value="{href_date}"{sel_date}>Date added (newest)</option>'
+        '</select>')
 
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Liveluxe — Daily Shortlist</title><style>{CSS}</style></head><body>
+<title>LuxeBot — Portal</title><style>{CSS}</style></head><body>
 <header>
-  <h1>Liveluxe — Daily Shortlist</h1>
-  <div class="meta">{tally['alive']} alive after gates &middot; {tally['total']} captured total
-   &middot; {esc(date.today().isoformat())}</div>
+  <h1>LuxeBot — Acquisition Portal</h1>
+  <div class="meta">{tally['alive']} alive &middot; {tally['total']} total &middot;
+   <b>{tally['new_today']} new today</b> &middot; database: {esc(db.backend_name())}
+   &middot; {esc(today)}</div>
 </header>
-<div class="controls">
+
+<div class="toolbar">
+  <button class="btn go" onclick="openREA()">🌐 Open realestate.com.au</button>
+  <button class="btn primary" onclick="scoreNow()">📍 Score now</button>
+  <span class="sep"></span>
   {tab('shortlist','Shortlist (alive)')}
   {tab('all','All (incl. rejected)')}
-  <a href="/export.xlsx?scope=shortlist">⬇ Export shortlist (Excel)</a>
-  <a href="/export.xlsx?scope=all">⬇ Export all (Excel)</a>
-  <span style="font-size:12px;color:#888">* = provisional score (run location scoring)</span>
+  <span class="sep"></span>
+  <a class="btn" href="{exp('shortlist')}">⬇ Export shortlist</a>
+  <a class="btn" href="{exp('all')}">⬇ Export all</a>
 </div>
+
+<div class="filterbar">
+  <b>Added:</b>
+  {date_btn('All','','')}
+  {date_btn('Today',today,today)}
+  {date_btn('Last 7 days',wk,today)}
+  <span class="sep"></span>
+  <form method="get" style="display:inline-flex; gap:6px; align-items:center;">
+    <input type="hidden" name="view" value="{esc(view)}">
+    <input type="hidden" name="sort" value="{esc(sort)}">
+    from <input type="date" name="from" value="{esc(added_from)}">
+    to <input type="date" name="to" value="{esc(added_to)}">
+    <button class="btn" type="submit">Apply range</button>
+  </form>
+  <span class="sep"></span>
+  Sort: {sort_sel}
+</div>
+
+<div id="scorebanner" class="banner" style="display:none;"></div>
 <div class="wrap">
 {due_html}
 {cards}
 </div>
+<div id="toast" class="toast"></div>
 <script>{JS}</script>
 </body></html>"""
 
@@ -269,6 +407,7 @@ EXPORT_COLS = [
     ("Composite", "composite", 11, False, "0"),
     ("Verdict", "_verdict", 18, True, None),
     ("Stage", "status", 14, False, None),
+    ("Added", "date_scraped", 12, False, None),
     ("BR", "bedrooms", 5, False, None),
     ("Bath", "bathrooms", 5, False, None),
     ("Car", "parking", 5, False, None),
@@ -329,14 +468,17 @@ def _est_row_height(row, ev):
     return min(150, max(18, lines * 14 + 3))
 
 
-def export_xlsx(include_rejected=True):
+def export_xlsx(include_rejected=True, added_from=None, added_to=None):
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.formatting.rule import ColorScaleRule
 
-    rows = storage.all_listings(include_rejected=include_rejected)
+    rows = storage.all_listings(include_rejected=include_rejected,
+                                added_from=added_from, added_to=added_to)
     scope = "All listings" if include_rejected else "Shortlist (alive)"
+    if added_from or added_to:
+        scope += f" ({added_from or '…'} to {added_to or '…'})"
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -385,6 +527,8 @@ def export_xlsx(include_rejected=True):
                 val = ev
             elif key == "url":
                 val = "View" if row.get("url") else None
+            elif key == "date_scraped":
+                val = (row.get("date_scraped") or "")[:10]   # date only
             else:
                 val = row.get(key)
             c = ws.cell(row=ri, column=ci, value=val)
@@ -431,44 +575,72 @@ def export_xlsx(include_rejected=True):
 # ---------------------------------------------------------------------------
 
 class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path.startswith("/export.xlsx"):
-            include_rejected = "scope=all" in self.path
-            scope = "all" if include_rejected else "shortlist"
-            data = export_xlsx(include_rejected=include_rejected)
-            self.send_response(200)
-            self.send_header("Content-Type",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            self.send_header("Content-Disposition",
-                f'attachment; filename="liveluxe_{scope}_{date.today().isoformat()}.xlsx"')
-            self.end_headers()
-            self.wfile.write(data)
-            return
-        view = "shortlist"
-        if "view=all" in self.path:
-            view = "all"
-        body = render_page(view).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+    def _send(self, code, ctype, body, extra=None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(body)
+        if body:
+            self.wfile.write(body)
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        q = parse_qs(parsed.query)
+        g = lambda name, d="": q.get(name, [d])[0]
+
+        if path == "/open-rea":
+            try:
+                webbrowser.open(REA_URL)
+            except Exception:
+                pass
+            self._send(204, "text/plain", b"")
+            return
+
+        if path == "/score-status":
+            self._send(200, "application/json", json.dumps(SCORE_STATE).encode())
+            return
+
+        if path == "/export.xlsx":
+            include_rejected = g("scope") == "all"
+            scope = "all" if include_rejected else "shortlist"
+            data = export_xlsx(include_rejected=include_rejected,
+                               added_from=g("from") or None,
+                               added_to=g("to") or None)
+            self._send(
+                200,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                data,
+                {"Content-Disposition":
+                 f'attachment; filename="luxebot_{scope}_{date.today().isoformat()}.xlsx"'})
+            return
+
+        view = "all" if g("view") == "all" else "shortlist"
+        sort = "date" if g("sort") == "date" else "composite"
+        body = render_page(view, sort, g("from"), g("to")).encode("utf-8")
+        self._send(200, "text/html; charset=utf-8", body)
 
     def do_POST(self):
-        if self.path != "/update":
-            self.send_response(404); self.end_headers(); return
-        length = int(self.headers.get("Content-Length", 0))
-        try:
-            data = json.loads(self.rfile.read(length))
-            storage.update_user_field(data["listing_id"], data["field"],
-                                      data["value"] or None)
-            out = json.dumps({"ok": True})
-            self.send_response(200)
-        except Exception as e:
-            out = json.dumps({"ok": False, "error": str(e)})
-            self.send_response(500)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(out.encode())
+        path = urlparse(self.path).path
+        if path == "/score":
+            started = start_scoring()
+            self._send(200, "application/json",
+                       json.dumps({"started": started}).encode())
+            return
+        if path == "/update":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                data = json.loads(self.rfile.read(length))
+                storage.update_user_field(data["listing_id"], data["field"],
+                                          data["value"] or None)
+                self._send(200, "application/json",
+                           json.dumps({"ok": True}).encode())
+            except Exception as e:
+                self._send(500, "application/json",
+                           json.dumps({"ok": False, "error": str(e)}).encode())
+            return
+        self._send(404, "text/plain", b"")
 
     def log_message(self, *a):
         pass

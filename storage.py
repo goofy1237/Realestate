@@ -176,12 +176,31 @@ def upsert_listing(rec, score):
         conn.close()
 
 
-def all_listings(include_rejected=True):
-    sql = "SELECT * FROM listings"
+def all_listings(include_rejected=True, added_from=None, added_to=None,
+                 order="composite"):
+    """
+    List listings, newest-scored-first by default.
+    added_from / added_to are 'YYYY-MM-DD' strings that filter on the date the
+    listing was first added (date_scraped). order='date' sorts by date added.
+    """
+    ph = db.PLACEHOLDER
+    clauses, params = [], []
     if not include_rejected:
-        sql += " WHERE rejected=0"
-    sql += " ORDER BY composite DESC"
-    return db.query(sql)
+        clauses.append("rejected=0")
+    if added_from:
+        clauses.append(f"date_scraped >= {ph}")
+        params.append(f"{added_from}T00:00:00")
+    if added_to:
+        clauses.append(f"date_scraped <= {ph}")
+        params.append(f"{added_to}T23:59:59")
+    sql = "SELECT * FROM listings"
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    if order == "date":
+        sql += " ORDER BY date_scraped DESC, composite DESC"
+    else:
+        sql += " ORDER BY composite DESC"
+    return db.query(sql, params)
 
 
 def update_user_field(listing_id, field, value):
@@ -194,7 +213,10 @@ def update_user_field(listing_id, field, value):
 
 
 def counts():
-    rows = db.query("SELECT rejected FROM listings")
+    rows = db.query("SELECT rejected, date_scraped FROM listings")
     total = len(rows)
     alive = sum(1 for r in rows if not r.get("rejected"))
-    return {"total": total, "alive": alive}
+    today = datetime.now().date().isoformat()
+    new_today = sum(1 for r in rows
+                    if (r.get("date_scraped") or "").startswith(today))
+    return {"total": total, "alive": alive, "new_today": new_today}

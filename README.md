@@ -83,16 +83,25 @@ same `SUPABASE_DB_URL` shares the same listings, scores, and follow-up state.
 
 ## Daily use
 
-Double-click **`START_HERE.bat`** — it starts the capture receiver, opens
-realestate.com.au to browse, then (after you finish) scores everything and opens
-the dashboard. Or run the steps individually:
+Double-click **`START_HERE.bat`** to open the **Portal** — one window that runs
+everything. From it you can:
+
+- **🌐 Open realestate.com.au** to browse (pages capture automatically)
+- **📍 Score now** to add location scores
+- **Filter by date added** (Today / Last 7 days / custom range) and **sort** by
+  score or date added
+- Edit verdict / stage / follow-up / notes, and **export to Excel**
+
+Power users can still run individual steps:
 
 | File | What it does |
 |------|--------------|
-| `START_HERE.bat`    | The whole loop: capture → score → dashboard |
+| `START_HERE.bat` / `app.py` | The **Portal** — capture + score + dashboard in one window |
 | `run_receiver.bat`  | Capture only (browse REA with it running) |
 | `run_score.bat`     | Add location scores / finalise verdicts |
-| `run_dashboard.bat` | Open the dashboard app |
+| `run_dashboard.bat` | Open just the dashboard app |
+| `setup_db.bat`      | Configure the shared Supabase database |
+| `migrate_to_supabase.bat` | Copy local listings into Supabase |
 
 ## Project layout
 
@@ -106,11 +115,16 @@ the dashboard. Or run the steps individually:
 | `location.py` / `geocode.py` | Location scoring via free OpenStreetMap |
 | `db.py`         | Database layer — shared Supabase (Postgres) or local SQLite |
 | `storage.py`    | Listing storage (dedupes on listing id) |
+| `app.py`        | The Portal — runs receiver + dashboard in one window |
 | `dashboard.py` / `dashboard_app.py` | Ranked dashboard + Excel export |
 | `score_all.py`  | Batch location scoring pass |
 
 ## Notes
 
+- **No duplicates:** every listing is keyed on its `listing_id`; re-capturing
+  updates the existing row instead of adding a copy.
+- **Date added:** each listing records the date it first entered the database, so
+  you can filter to a single day or a custom range and sort by it.
 - Your data (the database, captured pages, browser profiles) stays local and is
   **not** committed — see `.gitignore`.
 - Set your contact email in `config.py` (`NOMINATIM_CONTACT_EMAIL`) for the

@@ -54,18 +54,28 @@ When the second line finishes, setup is done. You can close the window.
 
 ## Part 2 — Daily use
 
-### The easy way: one file
-Double-click **`START_HERE.bat`**. It will:
+### Everything in one window: the Portal
+Double-click **`START_HERE.bat`**. A single **Portal** window opens — you do
+everything from here:
 
-1. Open a small **Receiver** window (leave it open) — this catches the listings.
-2. Open **realestate.com.au** in your browser.
-3. **You browse** the suburbs/pages you want. Every results page you open is
-   captured automatically — you'll see the Receiver window count them.
-4. When you've finished browsing, click back on the **Start Here** window and
-   **press any key**.
-5. It adds location scores, then opens your **dashboard**.
+1. Click **🌐 Open realestate.com.au**. Browse the suburbs/pages you want — each
+   page is captured automatically. (Turn on the extension's *Auto-advance* to
+   page through results hands-free.)
+2. Back in the Portal, click **📍 Score now**. It adds location scores in the
+   background; the page refreshes itself when done.
+3. Review your ranked shortlist right there.
 
-That's it: browse → press a key → review.
+That's it: open REA → score → review, all in one window. Close the window to stop.
+
+### Filtering by date
+Use the filter bar to see exactly what you want:
+- **Today** — just today's newly-added listings.
+- **Last 7 days** — the past week.
+- **from / to** — pick any custom date range, then **Apply range**.
+- **Sort** — by Score (best first) or Date added (newest first).
+
+Every listing shows a **🗓 Added** date, and there are **never duplicates** — if
+the same listing is captured again, it just updates in place.
 
 ### Auto-advance through pages (optional)
 If you don't want to click "next page" yourself:
