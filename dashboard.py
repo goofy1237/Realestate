@@ -56,9 +56,9 @@ VERDICT_COLOURS = {
     "Pass (low priority)": "#777",
     "Pass (reject)": "#c5221f",
 }
-SCORE_MAX = {"score_A": 30, "score_B": 25, "score_C": 20, "score_D": 15, "score_E": 10}
-SCORE_LABEL = {"score_A": "Standout", "score_B": "Location", "score_C": "Amenities",
-               "score_D": "Interior", "score_E": "Pricing"}
+SCORE_MAX = {"score_a": 30, "score_b": 25, "score_c": 20, "score_d": 15, "score_e": 10}
+SCORE_LABEL = {"score_a": "Standout", "score_b": "Location", "score_c": "Amenities",
+               "score_d": "Interior", "score_e": "Pricing"}
 
 
 def esc(x):
@@ -228,7 +228,7 @@ def render_card(row, rank):
                      for v in (row.get("verify_reasons") or "").split(";") if v.strip())
 
     bars = "".join(render_bar(row, k) for k in
-                   ["score_A", "score_B", "score_C", "score_D", "score_E"])
+                   ["score_a", "score_b", "score_c", "score_d", "score_e"])
 
     beds = row.get("bedrooms"); bath = row.get("bathrooms"); car = row.get("parking")
     rent = row.get("price_display") or (f"${row.get('price_per_week')}/wk"
@@ -417,11 +417,11 @@ EXPORT_COLS = [
     ("Address", "address", 34, True, None),
     ("Hooks", "hooks", 22, True, None),
     ("Flags", "flags", 20, True, None),
-    ("Standout", "score_A", 9, False, "0"),
-    ("Location", "score_B", 9, False, "0"),
-    ("Amenities", "score_C", 9, False, "0"),
-    ("Interior", "score_D", 9, False, "0"),
-    ("Pricing", "score_E", 9, False, "0"),
+    ("Standout", "score_a", 9, False, "0"),
+    ("Location", "score_b", 9, False, "0"),
+    ("Amenities", "score_c", 9, False, "0"),
+    ("Interior", "score_d", 9, False, "0"),
+    ("Pricing", "score_e", 9, False, "0"),
     ("Agent", "agent_name", 18, True, None),
     ("Phone", "agent_phone", 14, False, None),
     ("Agency", "agency", 22, True, None),

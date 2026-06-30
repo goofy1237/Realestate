@@ -81,8 +81,12 @@ else:
 
 
 def rows_to_dicts(cursor):
-    """Return all rows from a cursor as a list of plain dicts (both engines)."""
-    cols = [d[0] for d in cursor.description]
+    """
+    Return all rows from a cursor as a list of plain dicts (both engines).
+    Column names are lowercased so SQLite (case-preserving) and Postgres
+    (case-folding) behave identically — e.g. both give 'score_a'.
+    """
+    cols = [d[0].lower() for d in cursor.description]
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
 
 
