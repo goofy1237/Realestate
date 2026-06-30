@@ -46,34 +46,32 @@ just do this — installing it again is harmless.
 
 ## Step 2 — Install the tool's parts  ⏳⏳ (THE SLOW ONE — 2–10 minutes)
 
-1. Open the LuxeBot folder in File Explorer (the folder with `START_HERE` in it).
-2. Click once in the **address bar** at the top (where the folder path is shown),
-   type **`cmd`**, and press **Enter**. A **black window** opens.
-3. Click into the black window, then **copy-paste these two lines one at a time**,
-   pressing **Enter** after each:
+**Just double-click `SETUP.bat`.** That's it — it creates everything and installs
+the parts for you.
 
-   ```
-   python -m venv .venv
-   ```
-   ```
-   .venv\Scripts\pip install -r requirements.txt
-   ```
+⏳⏳ **NOW WAIT. This is the slow step.** The window may:
+- show lines scrolling slowly, **or**
+- **sit completely still for minutes showing nothing** — this is normal, it's
+  downloading in the background.
 
-4. ⏳⏳ **NOW WAIT. This is the slow step.** After the second line, the window may:
-   - show lines scrolling slowly, **or**
-   - **sit completely still for minutes showing nothing** — this is normal, it's
-     downloading in the background.
-
-   **Do NOT close the window. Do NOT press keys. Do NOT run it again.** It can
-   take anywhere from 2 to 10 minutes depending on your internet. It's done when
-   you see the normal prompt again (a line ending in `>` waiting for input).
-
-5. When it's finished, you can close the black window. **You never have to do
-   Step 2 again.**
+**Do NOT close the window. Do NOT press keys. Do NOT run it again.** It can take
+2 to 10 minutes depending on your internet. It's finished when it prints
+**"SETUP COMPLETE!"**. Then you never have to do Step 2 again.
 
 > 😟 "It's been 5 minutes and nothing is happening — did it break?"
-> Almost certainly **no**. Give it up to 10 minutes. Only if it's still frozen
-> after that, close the window and run the second line again.
+> Almost certainly **no**. Give it up to 10 minutes.
+
+> 🛑 "It says Python is not installed / not on PATH."
+> Do Step 1 first (and make sure you ticked **Add python.exe to PATH**), then
+> run `SETUP.bat` again.
+
+> 🛑 "I double-clicked START_HERE and it said *the system cannot find the path
+> specified*."
+> That means setup hasn't been done on this computer yet — run **`SETUP.bat`**
+> first.
+
+*(Prefer typing it yourself? Open the folder, type `cmd` in the address bar, and
+run `python -m venv .venv` then `.venv\Scripts\pip install -r requirements.txt`.)*
 
 ## Step 3 — Connect the shared database (Supabase)
 
