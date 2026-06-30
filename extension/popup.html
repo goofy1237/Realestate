@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; width: 300px; padding: 12px; }
+    h1 { font-size: 15px; margin: 0 0 8px; }
+    .row { font-size: 13px; margin: 6px 0; }
+    .ok { color: #137333; font-weight: 600; }
+    .bad { color: #c5221f; font-weight: 600; }
+    .muted { color: #666; }
+    button { margin-top: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+    code { background: #f1f1f1; padding: 1px 4px; border-radius: 3px; }
+    .box { border:1px solid #e0e0e0; border-radius:8px; padding:10px; margin-top:10px; }
+    .box label { font-size:13px; }
+    input[type=number] { width:54px; }
+    hr { border:none; border-top:1px solid #eee; margin:10px 0; }
+  </style>
+</head>
+<body>
+  <h1>Liveluxe REA Capture</h1>
+  <div id="status" class="row muted">Loading status…</div>
+  <div id="detail" class="row muted"></div>
+
+  <div class="box">
+    <div class="row">
+      <label><input type="checkbox" id="autoAdvance"> <b>Auto-advance through pages</b></label>
+    </div>
+    <div class="row muted">
+      After capturing a results page, automatically go to the next page
+      (waits 3–5s between pages to stay polite).
+    </div>
+    <div class="row">
+      Stop after <input type="number" id="maxPages" min="1" max="50" value="5"> pages.
+    </div>
+  </div>
+
+  <hr>
+  <button id="recapture">Re-capture this page</button>
+  <div class="row muted" style="margin-top:10px;">
+    Make sure the local tool is running (<code>START_HERE.bat</code> or
+    <code>run_receiver.bat</code>).
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

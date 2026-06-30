@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Liveluxe REA Capture",
+  "version": "0.1",
+  "description": "Captures realestate.com.au listing data from pages you browse, into your local acquisition tool. No automation — it just reads what you already loaded.",
+  "permissions": ["storage", "scripting", "activeTab", "tabs"],
+  "host_permissions": [
+    "*://*.realestate.com.au/*",
+    "http://localhost:8765/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Liveluxe REA Capture"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.realestate.com.au/*"],
+      "js": ["net_hook_main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.realestate.com.au/*"],
+      "js": ["capture_main.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.realestate.com.au/*"],
+      "js": ["relay_isolated.js"],
+      "world": "ISOLATED",
+      "run_at": "document_idle"
+    }
+  ]
+}

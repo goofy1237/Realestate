@@ -1,0 +1,33 @@
+# =============================================================================
+#  .gitignore  —  keep private data and local junk OUT of the repo
+# =============================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# --- Browser profiles (may contain cookies / session tokens) — NEVER commit ---
+.browser_profile/
+.browser_profile_patchright/
+.chrome_manual_profile/
+.dashboard_app_profile/
+*[Pp]rofile/
+
+# --- Local data: scraped listings, captured pages, caches — NEVER commit ---
+output/
+listings.db
+listings.db-wal
+listings.db-shm
+*.sqlite
+*.sqlite3
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
