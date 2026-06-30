@@ -1,21 +1,20 @@
 # =============================================================================
-#  storage.py  —  the local SQLite database (one row per listing)
+#  storage.py  —  listing storage (one row per listing)
 # =============================================================================
-#  Stores every captured listing plus its scores and your workflow state.
-#  Key rules:
-#    * dedupe on listing_id (re-capturing a listing UPDATES it, never duplicates)
-#    * scraped + scored fields are refreshed on every capture
+#  Works against EITHER a shared Supabase/Postgres database (so you and a
+#  coworker share one set of listings) OR a local SQLite file — chosen
+#  automatically by db.py based on whether a Supabase URL is configured.
+#
+#  Key rules (unchanged):
+#    * dedupe on listing_id (re-capturing UPDATES, never duplicates)
+#    * scraped + scored fields refresh on every capture
 #    * YOUR fields (status, verdict_override, follow_up_date, notes) are NEVER
 #      overwritten by a re-capture — they belong to you
-#  Uses Python's built-in sqlite3 (no installs).
 # =============================================================================
 
-import json
-import sqlite3
 from datetime import datetime
-from pathlib import Path
 
-DB_FILE = Path(__file__).parent / "listings.db"
+import db
 
 # The seven acquisition stages (status field), in order.
 STAGES = ["new", "first-contact", "application", "suitability", "lodge",
@@ -37,66 +36,62 @@ _SCRAPE_FIELDS = [
 # Columns the USER owns — never overwritten by a re-capture.
 _USER_FIELDS = ["status", "verdict_override", "follow_up_date", "notes"]
 
-
-def _conn():
-    c = sqlite3.connect(DB_FILE)
-    c.row_factory = sqlite3.Row
-    return c
+# Types valid in BOTH SQLite and Postgres (TEXT / INTEGER / REAL).
+_DDL = """
+CREATE TABLE IF NOT EXISTS listings (
+    listing_id            TEXT PRIMARY KEY,
+    url                   TEXT,
+    suburb                TEXT,
+    address               TEXT,
+    postcode              TEXT,
+    price_per_week        INTEGER,
+    price_display         TEXT,
+    bedrooms              INTEGER,
+    bathrooms             INTEGER,
+    parking               INTEGER,
+    property_type         TEXT,
+    description           TEXT,
+    agency                TEXT,
+    agent_name            TEXT,
+    agent_names_all       TEXT,
+    agent_phone           TEXT,
+    inspections           TEXT,
+    bond_display          TEXT,
+    available_date        TEXT,
+    image_url             TEXT,
+    product_depth         TEXT,
+    result_bucket         TEXT,
+    lat                   REAL,
+    lng                   REAL,
+    score_A               INTEGER,
+    score_B               INTEGER,
+    score_C               INTEGER,
+    score_D               INTEGER,
+    score_E               INTEGER,
+    composite             INTEGER,
+    composite_provisional INTEGER,
+    verdict               TEXT,
+    rejected              INTEGER,
+    reject_reasons        TEXT,
+    flags                 TEXT,
+    verify_reasons        TEXT,
+    hooks                 TEXT,
+    gates_json            TEXT,
+    location_confident    INTEGER,
+    date_listed           TEXT,
+    date_scraped          TEXT,
+    status                TEXT DEFAULT 'new',
+    verdict_override      TEXT,
+    follow_up_date        TEXT,
+    notes                 TEXT,
+    date_updated          TEXT
+)
+"""
 
 
 def init_db():
-    with _conn() as c:
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS listings (
-            listing_id            TEXT PRIMARY KEY,
-            url                   TEXT,
-            suburb                TEXT,
-            address               TEXT,
-            postcode              TEXT,
-            price_per_week        INTEGER,
-            price_display         TEXT,
-            bedrooms              INTEGER,
-            bathrooms             INTEGER,
-            parking               INTEGER,
-            property_type         TEXT,
-            description           TEXT,
-            agency                TEXT,
-            agent_name            TEXT,
-            agent_names_all       TEXT,
-            agent_phone           TEXT,
-            inspections           TEXT,
-            bond_display          TEXT,
-            available_date        TEXT,
-            image_url             TEXT,
-            product_depth         TEXT,
-            result_bucket         TEXT,
-            lat                   REAL,
-            lng                   REAL,
-            score_A               INTEGER,
-            score_B               INTEGER,
-            score_C               INTEGER,
-            score_D               INTEGER,
-            score_E               INTEGER,
-            composite             INTEGER,
-            composite_provisional INTEGER,
-            verdict               TEXT,
-            rejected              INTEGER,
-            reject_reasons        TEXT,
-            flags                 TEXT,
-            verify_reasons        TEXT,
-            hooks                 TEXT,
-            gates_json            TEXT,
-            location_confident    INTEGER,
-            date_listed           TEXT,
-            date_scraped          TEXT,
-            -- user-owned workflow fields --
-            status                TEXT DEFAULT 'new',
-            verdict_override      TEXT,
-            follow_up_date        TEXT,
-            notes                 TEXT,
-            date_updated          TEXT
-        )""")
-    return DB_FILE
+    db.execute(_DDL)
+    return db.backend_name()
 
 
 def _row_from(rec, score):
@@ -138,7 +133,7 @@ def _row_from(rec, score):
         "flags": "; ".join(score["flags"]),
         "verify_reasons": "; ".join(score["verify_reasons"]),
         "hooks": ", ".join(h for h, _ in score["detail"]["hooks"]),
-        "gates_json": json.dumps(score["gates"]),
+        "gates_json": __import__("json").dumps(score["gates"]),
         "location_confident": int(not score["detail"]["location_pending"]),
         "date_listed": rec.get("date_listed"),
         "date_scraped": now,
@@ -151,49 +146,55 @@ def upsert_listing(rec, score):
     lid = row["listing_id"]
     if not lid:
         return "skipped"
+    ph = db.PLACEHOLDER
     now = datetime.now().isoformat(timespec="seconds")
-    with _conn() as c:
-        exists = c.execute(
-            "SELECT 1 FROM listings WHERE listing_id=?", (lid,)).fetchone()
+    conn = db.connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT 1 FROM listings WHERE listing_id={ph}", (lid,))
+        exists = cur.fetchone()
         if exists:
-            # On update, refresh everything EXCEPT date_scraped (first-seen).
-            upd_fields = [f for f in _SCRAPE_FIELDS if f != "date_scraped"]
-            sets = ", ".join(f"{k}=?" for k in upd_fields)
-            vals = [row.get(k) for k in upd_fields] + [now, lid]
-            c.execute(f"UPDATE listings SET {sets}, date_updated=? "
-                      f"WHERE listing_id=?", vals)
-            return "updated"
+            # Refresh everything EXCEPT date_scraped (first-seen) + user fields.
+            upd = [f for f in _SCRAPE_FIELDS if f != "date_scraped"]
+            sets = ", ".join(f"{k}={ph}" for k in upd)
+            cur.execute(
+                f"UPDATE listings SET {sets}, date_updated={ph} "
+                f"WHERE listing_id={ph}",
+                [row.get(k) for k in upd] + [now, lid])
+            result = "updated"
         else:
             cols = ["listing_id"] + _SCRAPE_FIELDS + ["date_updated"]
             vals = [lid] + [row.get(k) for k in _SCRAPE_FIELDS] + [now]
-            placeholders = ", ".join("?" for _ in cols)
-            c.execute(
+            placeholders = ", ".join(ph for _ in cols)
+            cur.execute(
                 f"INSERT INTO listings ({', '.join(cols)}) "
                 f"VALUES ({placeholders})", vals)
-            return "new"
+            result = "new"
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 def all_listings(include_rejected=True):
-    with _conn() as c:
-        q = "SELECT * FROM listings"
-        if not include_rejected:
-            q += " WHERE rejected=0"
-        q += " ORDER BY composite DESC"
-        return [dict(r) for r in c.execute(q).fetchall()]
+    sql = "SELECT * FROM listings"
+    if not include_rejected:
+        sql += " WHERE rejected=0"
+    sql += " ORDER BY composite DESC"
+    return db.query(sql)
 
 
 def update_user_field(listing_id, field, value):
     """Set one user-owned field (status / verdict_override / follow_up / notes)."""
     if field not in _USER_FIELDS:
         raise ValueError(f"not a user field: {field}")
-    with _conn() as c:
-        c.execute(f"UPDATE listings SET {field}=? WHERE listing_id=?",
-                  (value, listing_id))
+    ph = db.PLACEHOLDER
+    db.execute(f"UPDATE listings SET {field}={ph} WHERE listing_id={ph}",
+               (value, listing_id))
 
 
 def counts():
-    with _conn() as c:
-        total = c.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
-        alive = c.execute(
-            "SELECT COUNT(*) FROM listings WHERE rejected=0").fetchone()[0]
-        return {"total": total, "alive": alive}
+    rows = db.query("SELECT rejected FROM listings")
+    total = len(rows)
+    alive = sum(1 for r in rows if not r.get("rejected"))
+    return {"total": total, "alive": alive}

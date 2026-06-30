@@ -25,6 +25,10 @@ listings.db-shm
 *.sqlite
 *.sqlite3
 
+# --- Secrets: database connection string (Supabase password) — NEVER commit ---
+.env
+secrets.local.py
+
 # --- OS / editor cruft ---
 .DS_Store
 Thumbs.db

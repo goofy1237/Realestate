@@ -1,3 +1,5 @@
 # Python dependencies for LuxeBot.
 # The tool otherwise uses only the Python standard library.
 openpyxl>=3.1
+# Pure-Python Postgres driver — only needed if you use a shared Supabase DB.
+pg8000>=1.31

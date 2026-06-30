@@ -112,6 +112,30 @@ a score heat-scale, filters on every column, and clickable links to each listing
 
 ---
 
+## Part 3b — Sharing a database with a coworker (optional)
+
+By default the tool keeps listings in a file on your own computer. If you want
+you and a coworker to **share the same listings and scores**, point both of your
+computers at one Supabase database.
+
+1. In Supabase, open **Project Settings → Database → Connection string** and copy
+   the **URI** (use the *direct* connection, port **5432**). Replace
+   `[YOUR-PASSWORD]` with your database password.
+2. In the project folder, make a copy of **`.env.example`** and rename the copy to
+   **`.env`**.
+3. Open `.env` in Notepad and paste your connection string after
+   `SUPABASE_DB_URL=`. Save.
+4. Double-click **`run_db_test.bat`** — it should say **SUCCESS**.
+
+Give your coworker the same connection string (they put it in their own `.env`).
+Now you both share one database. Your `.env` file is private and never leaves your
+computer.
+
+> If you skip this, everything still works — it just uses a local database only
+> you can see.
+
+---
+
 ## Part 4 — Changing your criteria
 
 Everything tunable lives in **`config.py`** (open it in Notepad). Clearly

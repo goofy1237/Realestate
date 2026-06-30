@@ -67,6 +67,20 @@ Then load the browser extension once:
 
 See **[USER_GUIDE.md](USER_GUIDE.md)** for full, non-technical instructions.
 
+### Sharing a database (optional)
+
+By default each person has a local SQLite database. To **share one database**
+across a team, point the tool at a Supabase (Postgres) database:
+
+1. Copy `.env.example` to `.env`
+2. Paste your Supabase **direct** connection string (port 5432) into it:
+   `SUPABASE_DB_URL=postgresql://postgres:PASSWORD@db.xxxx.supabase.co:5432/postgres`
+3. Run `run_db_test.bat` to confirm it connects.
+
+The `.env` file is git-ignored, so the password never enters the repo. With no
+`.env`, the tool automatically falls back to local SQLite. Everyone who sets the
+same `SUPABASE_DB_URL` shares the same listings, scores, and follow-up state.
+
 ## Daily use
 
 Double-click **`START_HERE.bat`** — it starts the capture receiver, opens
@@ -90,7 +104,8 @@ the dashboard. Or run the steps individually:
 | `rea_parse.py`  | Extracts clean listings from REA's embedded data |
 | `scoring.py`    | The two-layer gates + weighted scoring |
 | `location.py` / `geocode.py` | Location scoring via free OpenStreetMap |
-| `storage.py`    | Local SQLite database (dedupes on listing id) |
+| `db.py`         | Database layer — shared Supabase (Postgres) or local SQLite |
+| `storage.py`    | Listing storage (dedupes on listing id) |
 | `dashboard.py` / `dashboard_app.py` | Ranked dashboard + Excel export |
 | `score_all.py`  | Batch location scoring pass |
 
