@@ -36,46 +36,45 @@ def find_browser():
 
 
 def main():
+    import socket
+    import time
     storage.init_db()
 
-    # Start the dashboard web server in the background (daemon = dies with us).
     server = ThreadingHTTPServer(("127.0.0.1", dashboard.PORT), dashboard.Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://localhost:{dashboard.PORT}"
+    url = f"http://127.0.0.1:{dashboard.PORT}"
+
+    # Wait until the server is actually accepting connections.
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", dashboard.PORT), 1):
+                break
+        except OSError:
+            time.sleep(0.2)
 
     print("=" * 60)
     print("  LIVELUXE — Dashboard (app window)")
-    print("=" * 60)
     print(f"  Running at {url}")
+    print("  >>> KEEP THIS WINDOW OPEN. Press Ctrl+C to stop. <<<")
+    print("=" * 60)
 
     browser = find_browser()
     if browser:
-        print("  Opening the app window. Close it to stop the dashboard.")
-        print("=" * 60)
-        # --app gives a chromeless standalone window; a dedicated profile
-        # keeps it separate from your normal browsing.
-        proc = subprocess.Popen([
-            browser,
-            f"--app={url}",
-            f"--user-data-dir={APP_PROFILE}",
-            "--window-size=1200,900",
-            "--no-first-run",
+        # Fire-and-forget — do NOT wait on the process (Chrome hands off to a
+        # background instance and the launched process exits immediately).
+        subprocess.Popen([
+            browser, f"--app={url}", f"--user-data-dir={APP_PROFILE}",
+            "--window-size=1200,900", "--no-first-run",
             "--no-default-browser-check",
         ])
-        proc.wait()                      # block until the app window is closed
-        print("\n  App window closed. Stopping dashboard.")
     else:
-        # No Chrome/Edge found — fall back to the default browser.
-        print("  (Chrome/Edge not found — opening in your default browser.)")
-        print("=" * 60)
         webbrowser.open(url)
-        try:
-            input("  Press Enter here to stop the dashboard...\n")
-        except EOFError:
-            import time
-            while True:
-                time.sleep(3600)
 
+    try:
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        pass
     server.shutdown()
 
 
