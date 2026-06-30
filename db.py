@@ -56,7 +56,12 @@ if IS_POSTGRES:
 
     def connect():
         u = urlparse(SUPABASE_DB_URL)
+        # Encrypt the connection (TLS) but skip CA-chain verification — this is
+        # the standard "sslmode=require" behaviour for Supabase's pooler, whose
+        # certificate isn't in Python's default trust store.
         ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
         return pg8000.dbapi.connect(
             user=unquote(u.username or "postgres"),
             password=unquote(u.password or ""),
