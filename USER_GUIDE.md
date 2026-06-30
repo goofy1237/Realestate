@@ -221,6 +221,26 @@ search-results page (rentals in a suburb).
 Make sure you finished Part 1 (the `.venv` folder must exist in the LuxeBot
 folder). If Windows SmartScreen warns, choose **More info → Run anyway**.
 
+**"Windows Smart App Control / Defender is BLOCKING `START_HERE.bat`."**
+This happens when the files were downloaded from the internet (a GitHub ZIP),
+which marks them "untrusted". Do **one** of these — do NOT turn off Smart App
+Control (that's permanent and can't be undone without reinstalling Windows):
+
+1. **Unblock the files.** Open the LuxeBot folder, click the address bar, type
+   `powershell`, press Enter, then paste:
+   ```
+   Get-ChildItem -Recurse | Unblock-File
+   ```
+   Close it and try again. *(Or: right-click `START_HERE.bat` → Properties →
+   tick **Unblock** → OK.)*
+2. **Run it directly** (Python itself is trusted/signed). In the folder, type
+   `cmd` in the address bar, Enter, then:
+   ```
+   .venv\Scripts\python.exe app.py
+   ```
+3. **Get it with Git instead of a ZIP** (cloned files aren't marked as
+   downloaded): `git clone https://github.com/goofy1237/Realestate.git`
+
 **"The database test failed."**
 Re-run `setup_db.bat` and re-paste the connection string. Make sure you replaced
 `[YOUR-PASSWORD]` (brackets and all) with your real password, and that you used
